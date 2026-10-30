@@ -10,9 +10,8 @@ from dotenv import load_dotenv
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BACKEND_DIR / ".env")
 
-GEMMA_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMMA_API_KEY = os.getenv("GEMMA_API_KEY") or os.getenv("GEMINI_API_KEY")
 GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma-4-26b-a4b-it")
-GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-3.8-flash").strip()
 DATABASE_URL = os.getenv("DATABASE_URL")
 AI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "30"))
 _upload_dir_setting = Path(os.getenv("UPLOAD_DIR", "uploads"))

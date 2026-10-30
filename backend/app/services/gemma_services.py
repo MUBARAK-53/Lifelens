@@ -1,17 +1,16 @@
-import base64
 import json
 import mimetypes
-import os
 from pathlib import Path
 
 from google import genai
-from app.core.config import GEMINI_VISION_MODEL, GEMMA_API_KEY, GEMMA_MODEL
+from google.genai import types
+
+from app.core.config import GEMMA_API_KEY, GEMMA_MODEL
 
 def _get_api_key() -> str:
-    key = GEMMA_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GEMMA_API_KEY")
-    if not key:
-        raise RuntimeError("API key is not configured in environment variables or config.")
-    return key
+    if not GEMMA_API_KEY:
+        raise RuntimeError("GEMMA_API_KEY is not configured.")
+    return GEMMA_API_KEY
 
 
 def generate_response(
@@ -52,10 +51,8 @@ def generate_response(
     ]
     contents.append({"role": "user", "parts": [{"text": message}]})
     
-    model_name = GEMMA_MODEL if GEMMA_MODEL else "gemini-2.5-flash"
-    
     response = client.models.generate_content(
-        model=model_name, 
+        model=GEMMA_MODEL,
         contents=contents, 
         config={
             "system_instruction": system_context, 
@@ -75,7 +72,7 @@ def analyze_image_with_gemma(
     user_notes: str | None = None,
     mime_type: str | None = None,
 ) -> dict:
-    """Analyze a stored image using Gemini's multimodal Interactions API."""
+    """Analyze a stored image using Gemma through the Gemini API."""
     image_path = Path(file_path)
     if not image_path.is_file():
         raise FileNotFoundError(f"Image file does not exist: {image_path}")
@@ -84,7 +81,6 @@ def analyze_image_with_gemma(
     if not resolved_mime_type or not resolved_mime_type.startswith("image/"):
         raise ValueError(f"Could not determine an image MIME type for {image_path.name}.")
 
-    image_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
     prompt = (
         "Analyze the attached image and return only a valid JSON object with these keys: "
         '"description" (one concise description), '
@@ -97,20 +93,20 @@ def analyze_image_with_gemma(
     )
 
     client = genai.Client(api_key=_get_api_key())
-    interaction = client.interactions.create(
-        model=GEMINI_VISION_MODEL,
-        input=[
-            {"type": "text", "text": prompt},
-            {
-                "type": "image",
-                "data": image_data,
-                "mime_type": resolved_mime_type,
-            },
+    response = client.models.generate_content(
+        model=GEMMA_MODEL,
+        contents=[
+            types.Part.from_bytes(
+                data=image_path.read_bytes(),
+                mime_type=resolved_mime_type,
+            ),
+            prompt,
         ],
+        config={"temperature": 0, "max_output_tokens": 1024},
     )
-    output_text = getattr(interaction, "output_text", None)
+    output_text = getattr(response, "text", None)
     if not isinstance(output_text, str) or not output_text.strip():
-        raise ValueError("Gemini returned an empty image-analysis response.")
+        raise ValueError("Gemma returned an empty image-analysis response.")
 
     json_text = output_text.strip()
     if json_text.startswith("```"):
@@ -118,11 +114,11 @@ def analyze_image_with_gemma(
         json_text = json_text.removesuffix("```").strip()
     result = json.loads(json_text)
     if not isinstance(result, dict):
-        raise ValueError("Gemini image-analysis response must be a JSON object.")
+        raise ValueError("Gemma image-analysis response must be a JSON object.")
 
     description = result.get("description")
     if not isinstance(description, str) or not description.strip():
-        raise ValueError("Gemini image-analysis response did not contain a description.")
+        raise ValueError("Gemma image-analysis response did not contain a description.")
 
     details = result.get("important_details")
     details = [item.strip() for item in details if isinstance(item, str) and item.strip()] if isinstance(details, list) else []
@@ -145,3 +141,33 @@ def analyze_image_with_gemma(
         "analysis_status": "completed",
         "analysis_error": None,
     }
+
+
+def generate_memory_reflection(experience: dict[str, object]) -> str:
+    """Generate a short reflection constrained to one retrieved experience."""
+    client = genai.Client(api_key=_get_api_key())
+    record = (
+        f"ID: {experience['id']}\n"
+        f"Title: {experience.get('title') or 'Untitled'}\n"
+        f"Date: {experience.get('captured_at') or 'Unknown'}\n"
+        f"Location: {experience.get('location_name') or 'Unknown'}\n"
+        f"Notes: {experience.get('user_notes') or 'None'}\n"
+        f"Description: {experience.get('ai_description') or 'None'}\n"
+        f"Tags: {', '.join(experience.get('extracted_tags') or []) or 'None'}"
+    )
+    response = client.models.generate_content(
+        model=GEMMA_MODEL,
+        contents="Write one warm reflection of at most 80 words about this saved memory.",
+        config={
+            "system_instruction": (
+                "You are Ghost AI. Use only the supplied memory record. Do not invent "
+                "people, events, dates, locations, emotions, or visual details. If the "
+                "record is sparse, acknowledge only what it contains.\n\nMemory record:\n" + record
+            ),
+            "temperature": 0.4,
+            "max_output_tokens": 160,
+        },
+    )
+    if not response.text:
+        raise RuntimeError("Gemma returned an empty memory reflection.")
+    return response.text.strip()

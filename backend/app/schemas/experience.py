@@ -44,3 +44,8 @@ class ExperienceSearchResponse(BaseModel):
     results: list[ExperienceResponse]
     summary: str | None = None
     summary_source: str = "database"
+
+
+class MemoryRevealResponse(BaseModel):
+    experience: ExperienceResponse
+    reflection: str
