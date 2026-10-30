@@ -1,74 +1,81 @@
-# LifeLens AI
 
-LifeLens is a local-development FastAPI backend for three separate kinds of personal data:
+# LifeLens AI – Ghost in the Machine
 
-- conversation history, scoped to a chat session;
-- explicit saved memories, reusable across sessions;
-- uploaded experiences (photos/screenshots plus user-provided metadata and optional AI analysis).
+Your memories never disappear. They wait to be remembered.
 
-It uses synchronous SQLAlchemy 2.x with PostgreSQL and the Google Gen AI SDK. It has no authentication or user ownership model; do not expose it to a network or use it as a multi-user service.
+LifeLens AI is a personal AI memory assistant that helps users
+store, search, retrieve, and rediscover meaningful experiences
+using natural language and Gemma.
 
-## Setup (Windows PowerShell)
+## Features
 
-From the repository root:
+- AI-powered conversations using Gemma.
+- Persistent conversation history.
+- Save and manage personal memories.
+- Upload photos, receipts, and other experiences.
+- Search stored experiences using natural language.
+- Retrieve relevant memories with source references.
+- AI-powered experience analysis.
 
-```powershell
-cd backend
-py -3.13 -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r app\requirements.txt
-Copy-Item .env.example .env
+## Technology Stack
+
+- Python
+- FastAPI
+- PostgreSQL
+- SQLAlchemy
+- Gemma
+- Pydantic
+
+## Project Structure
+
+```text
+LifeLens/
+├── backend/
+│   └── app/
+│       ├── core/
+│       ├── models/
+│       ├── routers/
+│       ├── schemas/
+│       ├── services/
+│       ├── database.py
+│       └── main.py
+├── .gitignore
+└── README.md
 ```
 
-Set `DATABASE_URL` and `GEMINI_API_KEY` in `backend/.env`. Never commit that file. Create a local PostgreSQL database first, for example `lifelens`, then use a URL such as `postgresql+psycopg://postgres:password@localhost:5432/lifelens`.
+## Current Development Status
 
-Run the database migration before starting the server. This preserves current rows; it does not reset the database.
+The backend currently supports:
 
-```powershell
-alembic -c alembic.ini upgrade head
-python -m uvicorn app.main:app --reload
+- Chat with persistent sessions.
+- Memory management.
+- Experience uploads and search.
+- AI-based experience analysis.
+- Retrieval of relevant experiences in chat.
+- References to retrieved experience records.
+
+## Getting Started
+
+Clone the repository:
+
+```bash
+git clone https://github.com/MUBARAK-53/Lifelens.git
+cd Lifelens
 ```
 
-Swagger is at `http://127.0.0.1:8000/docs`.
+Create and activate a Python virtual environment, install the
+backend requirements, configure your environment variables,
+and start the FastAPI application.
 
-## API
+API documentation is available at:
 
-- `POST /chat/`, `GET /chat/{session_id}/history`
-- `POST /memories/`, `GET /memories/`, `GET /memories/search`, `GET/PATCH/DELETE /memories/{memory_id}`
-- `POST /experiences/upload`, `GET /experiences/`, `GET/PATCH/DELETE /experiences/{experience_id}`
-- `POST /experiences/{experience_id}/analyze`, `POST /experiences/search`
-- `GET /`, `GET /health`
+`http://127.0.0.1:8000/docs`
 
-### Upload and search example
+## Privacy
 
-```powershell
-curl.exe -X POST http://127.0.0.1:8000/experiences/upload `
-  -F "image=@C:\photos\lake-hike.jpg" `
-  -F "title=Lake hike" -F "user_notes=Morning hike" -F "location_name=Pune"
+Do not commit API keys, database credentials, personal uploads,
+or local database files.
 
-curl.exe -X POST http://127.0.0.1:8000/experiences/search `
-  -H "Content-Type: application/json" `
-  -d '{"query":"photos from a hike near a lake","limit":10}'
-```
+## Project
 
-Uploads accept JPEG, PNG, and WebP, are content-validated, capped by `MAX_UPLOAD_BYTES` (10 MB by default), and are stored under `backend/uploads/experiences` with generated names. Responses contain only relative upload paths; the application deliberately provides no unrestricted static-file route.
-
-## AI compatibility
-
-Chat uses `GEMMA_MODEL`. Saved memories and keyword-matched experience records are retrieved before a chat response is generated, but arbitrary chat statements are never persisted as memories automatically.
-
-Image analysis is disabled by default. The existing configured model (`gemma-4-26b-a4b-it`) is not assumed to support image input. To enable analysis, set both `VISION_MODEL` to a model you have verified supports image parts in the Google Gen AI API and `VISION_MODEL_SUPPORTS_IMAGE_INPUT=true`. Failed or unconfigured analysis leaves the upload in `pending` or `failed` state for `POST /experiences/{id}/analyze`; it never discards the source image.
-
-Experience search is PostgreSQL keyword retrieval over titles, notes, AI descriptions, tags, and locations. It is not semantic/vector search, and it does not ask the model to invent matches.
-
-## Tests
-
-Tests use SQLite and mocked chat generation; they do not require a real API key or PostgreSQL database:
-
-```powershell
-cd backend
-pytest -q
-```
-
-They cover health, mocked chat plus cross-session memory retrieval, memory CRUD, image validation/size limits, experience listing/search/deletion, missing IDs, and safe deletion traversal rejection.
+Built as part of the Hacktoberfest 2026 Week 4 challenge.
